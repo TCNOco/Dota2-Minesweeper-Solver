@@ -6,3 +6,5 @@ Could have put more effort into this and got it somewhere, but if you came acros
 (honestly most people are Dota players how on Earth would we complete this entire thing?)
 
 Then check ouot this project: [https://github.com/andrey-karklins/dota2_mineweeper_bot](https://github.com/andrey-karklins/dota2_mineweeper_bot)
+
+This project looks at any screen size for the grass blocks in-game and gets the size/pos from that, as well as would do the solving offline, instead of reaching out to a website server, but that would take forever... And a deeper understanding of Minesweeper than I can deal with at the moment lol
