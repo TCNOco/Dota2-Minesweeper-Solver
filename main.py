@@ -87,7 +87,7 @@ def map_colors_to_levels(board_colors):
         (2, 186, 210): 3,
         (42, 197, 174): 2,
         (46, 153, 114): 1,
-        (194, 192, 220): -1 # marked as mine
+        (194, 192, 220): 99 # marked as mine
     }
     levels = []
     for row in board_colors:
@@ -97,16 +97,116 @@ def map_colors_to_levels(board_colors):
             if color_tuple in color_to_level:
                 level = color_to_level[color_tuple]
             elif 35 <= color[0] <= 50 and 55 <= color[1] <= 70 and 70 <= color[2] <= 90:
-                level = -2  # Empty dirt block
+                level = 0  # Empty dirt block
             else:
-                level = 0 # Grass block
+                level = -1 # Grass block
             level_row.append(level)
         levels.append(level_row)
     return levels
 
 def print_levels_matrix(levels):
     for row in levels:
-        print(" ".join(map(str, row)))
+        ## print(" ".join(map(str, row)))
+        # Pad each number to 2 spaces
+        print(" ".join([f"{num:2}" for num in row]))
+
+
+def  get_unknown_neighbors(known_unknown, y, x, threatlevel):
+    # if at board ends, just use 0 as the imaginary neighbors
+    # Get the number of neigbors that are unknown (0)
+    known = 0
+    unknown = 0
+    
+    upper_left = known_unknown[y - 1][x - 1] if y - 1 >= 0 and x - 1 >= 0 else 0
+    upper = known_unknown[y - 1][x] if y - 1 >= 0 else 0
+    upper_right = known_unknown[y - 1][x + 1] if y - 1 >= 0 and x + 1 < len(known_unknown[y]) else 0
+    left = known_unknown[y][x - 1] if x - 1 >= 0 else 0
+    right = known_unknown[y][x + 1] if x + 1 < len(known_unknown[y]) else 0
+    lower_left = known_unknown[y + 1][x - 1] if y + 1 < len(known_unknown) and x - 1 >= 0 else 0
+    lower = known_unknown[y + 1][x] if y + 1 < len(known_unknown) else 0
+    lower_right = known_unknown[y + 1][x + 1] if y + 1 < len(known_unknown) and x + 1 < len(known_unknown[y]) else 0
+
+    neighbors = [upper_left, upper, upper_right, left, right, lower_left, lower, lower_right]
+
+    for neighbor in neighbors:
+        if neighbor == 0:
+            unknown += 1
+        else:
+            known += 1
+        
+    # print neighboring board
+    if unknown == threatlevel:
+        print(f"Neighbors ({x} {y}): ")
+        print(f"{upper_left}, {upper}, {upper_right}\n{left}, {threatlevel}, {right}\n{lower_left}, {lower}, {lower_right}")
+
+    # # X - 1, Y - 1 to X + 1, Y + 1
+    # # known if outside of bounds, or known_unknown[y][x] == 1
+    # for y_window in range(y - 1, y + 2):
+    #     for x_window in range(x - 1, x + 2):
+    #         if y_window < 0 or x_window < 0 or y_window >= len(known_unknown) or x_window >= len(known_unknown[y_window]):
+    #             known += 1
+    #         elif known_unknown[y_window][x_window] == 1:
+    #             known += 1
+    #         else:
+    #             unknown += 1
+
+    print(f"{x}, {y} - Known: {known}, Unknown: {unknown}, Threat: {threatlevel}")
+    return unknown
+
+def right_click_on_bomb(x, y):
+    # Right click
+    pyautogui.rightClick(x, y)
+
+def mark_bombs(levels, top_left, bottom_right):
+    # -1 is unchecked ground
+    # 0 is already cleared ground
+    # 99 is marked as a mine
+    marked_levels = [row[:] for row in levels]  # Create a copy of the levels matrix
+    
+    # Set known_unknown to the same matrix, but -1 is 0, and 1 is everything else:
+    known_unknown = [[0 if cell == -1 else 1 for cell in row] for row in levels] # 0 is unknown, 1 is known
+    
+    # print unknown board
+    print("Known Unknown:")
+    print_levels_matrix(known_unknown)
+
+    while True:
+        found_match = False
+        for y in range(len(levels)):
+            for x in range(len(levels[y])):
+                if levels[y][x] in range(1, 9):  # If is number: Check around
+                    # Check the 3x3 window around the cell
+                    known = get_unknown_neighbors(known_unknown, y, x, levels[y][x])
+                    if known == levels[y][x]:  # If the same number of unknowns as the number of mines: All are mines
+                        # Set all unknowns to mines (X) in marked_levels. Set all unknowns to known in known_unknown
+                        for y_window in range(y - 1, y + 2):
+                            for x_window in range(x - 1, x + 2):
+                                if 0 <= y_window < len(levels) and 0 <= x_window < len(levels[y_window]):
+                                    if known_unknown[y_window][x_window] == 0:
+                                        marked_levels[y_window][x_window] = 99
+                                        known_unknown[y_window][x_window] = 1
+                                        # Click on the bomb
+                                        right_click_on_bomb(top_left[0] + x_window * 48 + 24, top_left[1] + y_window * 48 + 24)
+                                        found_match = True
+                                        break
+                        if found_match:
+                            break
+            if found_match:
+                break
+        if not found_match:
+            break
+        # Wait for a second and capture a new screenshot
+        time.sleep(1)
+        screenshot = capture_screenshot()
+        board_colors = get_block_colors(screenshot, top_left, bottom_right)
+        levels = map_colors_to_levels(board_colors)
+        marked_levels = [row[:] for row in levels]  # Update marked_levels with the new levels
+        known_unknown = [[0 if cell == -1 else 1 for cell in row] for row in levels]  # Update known_unknown with the new levels
+
+    # Click that point on the screen
+    print_levels_matrix(marked_levels)
+
+    return marked_levels
 
 tile_variants_folder = "tile_variants"
 
@@ -121,6 +221,9 @@ if top_left and bottom_right:
     save_screenshot(screenshot[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]], "game_board_latest.png")
     levels = map_colors_to_levels(board_colors)
     print_levels_matrix(levels)
+    marked_levels = mark_bombs(levels, top_left, bottom_right)
+    #print("Marked Levels:")
+    #print_levels_matrix(marked_levels)
 else:
     print("Board not detected!")
 
